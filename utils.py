@@ -53,20 +53,40 @@ def extract_14h_temperatures(
     # timezone to correctly determine (local) 14:00
     place_tz = tz.gettz(place_tz)
     temps_by_dates: List[DateTemperatureDict] = []
+    prev_hrs_difference = None
+    prev_date = None
+    required_hour = 15
+    prev_temp = None
     for entry in timeseries:
         # TODO: test and handle DST timezone change
         dt = datetime.fromisoformat(entry["time"].replace("Z", "+00:00"))
         local_dt = dt.astimezone(place_tz)
         hour = local_dt.hour
         date = local_dt.date().isoformat()
-        if hour == 14:
-            temp = entry["data"]["instant"]["details"].get("air_temperature")
+        if prev_date != date:
+            temp_for_date_found = False
+            prev_hrs_difference = None
+        if temp_for_date_found:
+            continue
+        temp = entry["data"]["instant"]["details"].get("air_temperature")
+        cur_hrs_difference = abs(required_hour - hour)
+        if prev_hrs_difference is None:
+            prev_hrs_difference = cur_hrs_difference
+        temp = entry["data"]["instant"]["details"].get("air_temperature")
+        if cur_hrs_difference == 0 or cur_hrs_difference > prev_hrs_difference:
             if temp is not None:
+                closest_temp = temp
+                if cur_hrs_difference > prev_hrs_difference:
+                    closest_temp = prev_temp
                 temp_for_date: DateTemperatureDict = {
                     "date": date,
-                    "temperature": temp
+                    "temperature": closest_temp
                 }
                 temps_by_dates.append(temp_for_date)
+                temp_for_date_found = True
+        prev_hrs_difference = cur_hrs_difference
+        prev_date = date
+        prev_temp = temp
     return temps_by_dates
 
 
